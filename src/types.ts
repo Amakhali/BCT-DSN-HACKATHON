@@ -27,3 +27,14 @@ export interface SimulationResult {
   rating: number;
   reasoning: string;
 }
+
+export interface Recommendation {
+  item: ItemMetadata;
+  reasoning: string;
+  matchScore: number; // 0-100
+}
+
+export interface RecommendationResult {
+  recommendations: Recommendation[];
+  analysis: string; // The agent's reasoning process
+}

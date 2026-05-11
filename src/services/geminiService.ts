@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { UserProfile, ItemMetadata, SimulationResult } from "../types";
+import { UserProfile, ItemMetadata, SimulationResult, RecommendationResult } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -74,6 +74,99 @@ export async function generatePersona(theme: string): Promise<UserProfile> {
     throw new Error("Failed to generate persona.");
   }
 }
+
+export async function getRecommendations(
+  profile: UserProfile,
+  candidates: ItemMetadata[],
+  context: string = ""
+): Promise<RecommendationResult> {
+  const prompt = `
+USER PROFILE:
+- Name: ${profile.name}
+- Bio: ${profile.bio}
+- Traits: ${profile.traits.join(", ")}
+- Review History:
+${profile.history.map(r => `  * [${r.rating} stars] ${r.itemName}: "${r.content}"`).join("\n")}
+
+CANDIDATE ITEMS:
+${candidates.map((item, i) => `
+[Item ${i}]
+- Name: ${item.name}
+- Category: ${item.category}
+- Description: ${item.description}
+- Features: ${item.features.join(", ")}
+`).join("\n")}
+
+ADDITIONAL CONTEXT:
+${context}
+
+TASK:
+1. ANALYZE: Reason about the user's core values, recurring complaints, and what actually "sparks joy" for them.
+2. RECOMMEND: Rank the best fits from the candidate list.
+3. EXPLAIN: For each recommendation, provide a nuanced justification.
+
+Output must be a valid JSON object:
+- analysis: (string, your step-by-step reasoning about the user's needs)
+- recommendations: Array of {
+    rank: number,
+    itemName: string,
+    matchScore: number (0-100),
+    reasoning: string
+  }
+`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
+        systemInstruction: "You are an Elite Recommendation Agent. You use deep behavioral analysis to perform 'conversational retrieval'—finding the perfect item even with complex user signals.",
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            analysis: { type: Type.STRING },
+            recommendations: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  rank: { type: Type.NUMBER },
+                  itemName: { type: Type.STRING },
+                  matchScore: { type: Type.NUMBER },
+                  reasoning: { type: Type.STRING },
+                },
+                required: ["rank", "itemName", "matchScore", "reasoning"],
+              },
+            },
+          },
+          required: ["analysis", "recommendations"],
+        },
+      },
+    });
+
+    const data = JSON.parse(response.text || "{}");
+    
+    // Map back to our full ItemMetadata
+    const mappedRecs = data.recommendations.map((rec: any) => {
+      const item = candidates.find(c => c.name === rec.itemName) || candidates[0];
+      return {
+        item,
+        reasoning: rec.reasoning,
+        matchScore: rec.matchScore,
+      };
+    });
+
+    return {
+      analysis: data.analysis,
+      recommendations: mappedRecs,
+    };
+  } catch (error) {
+    console.error("Recommendation failed:", error);
+    throw new Error("Failed to generate recommendations.");
+  }
+}
+
 export async function simulateUserReview(
   profile: UserProfile,
   item: ItemMetadata,

@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { UserProfile, ItemMetadata, SimulationResult } from "./types";
+import { UserProfile, ItemMetadata, SimulationResult, RecommendationResult } from "./types";
 import { DEMO_PROFILES, DEMO_ITEMS } from "./constants";
-import { simulateUserReview, generatePersona } from "./services/geminiService";
+import { simulateUserReview, generatePersona, getRecommendations } from "./services/geminiService";
 import { 
   User, 
   Package, 
@@ -16,29 +16,51 @@ import {
   ChevronRight,
   Database,
   Cpu,
-  RefreshCw
+  RefreshCw,
+  LayoutGrid,
+  MessagesSquare,
+  Search,
+  ArrowRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import ReactMarkdown from "react-markdown";
+
+type TaskType = "A" | "B";
 
 export default function App() {
   const [profiles, setProfiles] = useState<UserProfile[]>(DEMO_PROFILES);
   const [selectedProfile, setSelectedProfile] = useState<UserProfile>(DEMO_PROFILES[0]);
   const [targetItem, setTargetItem] = useState<ItemMetadata>(DEMO_ITEMS[0]);
+  const [currentTask, setCurrentTask] = useState<TaskType>("A");
   const [isSimulating, setIsSimulating] = useState(false);
   const [isGeneratingPersona, setIsGeneratingPersona] = useState(false);
   const [personaTheme, setPersonaTheme] = useState("");
-  const [result, setResult] = useState<SimulationResult | null>(null);
+  const [resultA, setResultA] = useState<SimulationResult | null>(null);
+  const [resultB, setResultB] = useState<RecommendationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [context, setContext] = useState("");
 
-  const handleSimulate = async () => {
+  const handleSimulateTaskA = async () => {
     setIsSimulating(true);
-    setResult(null);
+    setResultA(null);
     setError(null);
     try {
       const data = await simulateUserReview(selectedProfile, targetItem, context);
-      setResult(data);
+      setResultA(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An unknown error occurred");
+    } finally {
+      setIsSimulating(false);
+    }
+  };
+
+  const handleSimulateTaskB = async () => {
+    setIsSimulating(true);
+    setResultB(null);
+    setError(null);
+    try {
+      const data = await getRecommendations(selectedProfile, DEMO_ITEMS, context);
+      setResultB(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An unknown error occurred");
     } finally {
@@ -99,11 +121,24 @@ export default function App() {
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-indigo-600 rounded-sm flex items-center justify-center font-bold text-white uppercase italic tracking-tighter">PM</div>
           <h1 className="text-xl font-bold tracking-tighter uppercase whitespace-nowrap">
-            PersonaMind <span className="text-indigo-500 font-mono tracking-normal">v1.2</span>
+            PersonaMind <span className="text-indigo-500 font-mono tracking-normal">2.0</span>
           </h1>
         </div>
-        <nav className="flex gap-6 text-[10px] font-bold tracking-widest uppercase opacity-70">
-          <a href="#" className="text-indigo-400">User Modeling Challenge</a>
+        <nav className="flex gap-4">
+          <button 
+            onClick={() => setCurrentTask("A")}
+            className={`label-micro px-4 py-2 rounded transition-all flex items-center gap-2 ${currentTask === "A" ? "bg-indigo-600 text-white" : "bg-white/5 text-slate-500 hover:bg-white/10"}`}
+          >
+            <MessagesSquare className="w-3 h-3" />
+            Task A: Modeling
+          </button>
+          <button 
+            onClick={() => setCurrentTask("B")}
+            className={`label-micro px-4 py-2 rounded transition-all flex items-center gap-2 ${currentTask === "B" ? "bg-indigo-600 text-white" : "bg-white/5 text-slate-500 hover:bg-white/10"}`}
+          >
+            <Search className="w-3 h-3" />
+            Task B: Recommendation
+          </button>
         </nav>
       </header>
 
@@ -177,29 +212,49 @@ export default function App() {
         <div className="md:col-span-4 bento-card flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-              <span className="label-micro text-slate-500">Target Stimulus</span>
+              <div className={`w-2 h-2 rounded-full ${currentTask === "A" ? "bg-emerald-500" : "bg-indigo-500"} animate-pulse`}></div>
+              <span className="label-micro text-slate-500">{currentTask === "A" ? "Target Stimulus" : "Recommendation Logic"}</span>
             </div>
-            <label className="label-micro block mb-1">Inference Target</label>
-            <select 
-              className="w-full bg-black border border-white/10 p-3 rounded font-mono text-[11px] text-indigo-400 mb-4 focus:outline-none appearance-none"
-              onChange={(e) => setTargetItem(DEMO_ITEMS.find(i => i.name === e.target.value) || DEMO_ITEMS[0])}
-              value={targetItem.name}
-            >
-              {DEMO_ITEMS.map(i => (
-                <option key={i.name} value={i.name}>{i.name}</option>
-              ))}
-            </select>
-            <div className="space-y-1">
-               <p className="text-sm font-bold text-white tracking-tight">{targetItem.name}</p>
-               <p className="text-xs text-slate-500 line-clamp-2 italic mb-4">{targetItem.description}</p>
-            </div>
+            
+            {currentTask === "A" && (
+              <>
+                <label className="label-micro block mb-1">Inference Target</label>
+                <select 
+                  className="w-full bg-black border border-white/10 p-3 rounded font-mono text-[11px] text-indigo-400 mb-4 focus:outline-none appearance-none"
+                  onChange={(e) => setTargetItem(DEMO_ITEMS.find(i => i.name === e.target.value) || DEMO_ITEMS[0])}
+                  value={targetItem.name}
+                >
+                  {DEMO_ITEMS.map(i => (
+                    <option key={i.name} value={i.name}>{i.name}</option>
+                  ))}
+                </select>
+                <div className="space-y-1">
+                   <p className="text-sm font-bold text-white tracking-tight">{targetItem.name}</p>
+                   <p className="text-xs text-slate-500 line-clamp-2 italic mb-4">{targetItem.description}</p>
+                </div>
+              </>
+            )}
+
+            {currentTask === "B" && (
+              <div className="mb-4">
+                <h4 className="text-sm font-bold text-white mb-2">Candidate Pool</h4>
+                <div className="space-y-2 max-h-[120px] overflow-y-auto scrollbar-none">
+                  {DEMO_ITEMS.map((item, idx) => (
+                    <div key={idx} className="p-2 border border-white/5 rounded bg-white/5 flex items-center justify-between">
+                      <span className="text-[10px] font-mono truncate mr-2">{item.name}</span>
+                      <span className="text-[9px] text-slate-500">{item.category}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="pt-4 border-t border-white/5">
               <label className="label-micro block mb-1 opacity-50">Contextual Nuance</label>
               <input 
                 type="text"
                 value={context}
-                placeholder="e.g. Rainy day, user is in a hurry..."
+                placeholder={currentTask === "A" ? "e.g. Rainy day..." : "e.g. User is looking for a gift..."}
                 className="w-full bg-black/30 border border-white/5 rounded px-2 py-1.5 text-[10px] focus:outline-none focus:border-indigo-500 text-slate-300 italic"
                 onChange={(e) => setContext(e.target.value)}
               />
@@ -207,7 +262,7 @@ export default function App() {
           </div>
           
           <button 
-            onClick={handleSimulate}
+            onClick={currentTask === "A" ? handleSimulateTaskA : handleSimulateTaskB}
             disabled={isSimulating}
             className="w-full btn-bento mt-6 flex items-center justify-center gap-2"
           >
@@ -216,7 +271,7 @@ export default function App() {
             ) : (
               <>
                 <Play className="w-3 h-3 fill-current" />
-                EXECUTE SIMULATION
+                {currentTask === "A" ? "EXECUTE SIMULATION" : "GENERATE RECOMMENDATIONS"}
               </>
             )}
           </button>
@@ -267,7 +322,7 @@ export default function App() {
           {/* Result Card */}
           <div className="flex-grow bento-card border-none bg-gradient-to-br from-slate-900 to-black relative overflow-hidden flex flex-col">
             <AnimatePresence mode="wait">
-              {!result && !isSimulating && !error && (
+              {((currentTask === "A" && !resultA) || (currentTask === "B" && !resultB)) && !isSimulating && !error && (
                 <motion.div 
                   key="empty"
                   initial={{ opacity: 0 }}
@@ -293,7 +348,9 @@ export default function App() {
                       className="w-full h-full bg-indigo-500" 
                     />
                   </div>
-                  <p className="label-micro animate-pulse">Inferring Behavioral Nuance...</p>
+                  <p className="label-micro animate-pulse">
+                    {currentTask === "A" ? "Inferring Behavioral Nuance..." : "Ranking Candidate Pool..."}
+                  </p>
                   <div className="mt-4 flex gap-4">
                     <span className="text-[9px] font-mono opacity-30">ENCODING_TEXT</span>
                     <span className="text-[9px] font-mono opacity-30">MAPPING_SENTIMENT</span>
@@ -315,9 +372,9 @@ export default function App() {
                 </motion.div>
               )}
 
-              {result && (
+              {currentTask === "A" && resultA && (
                 <motion.div 
-                  key="result"
+                  key="resultA"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="flex-grow flex flex-col h-full"
@@ -327,10 +384,10 @@ export default function App() {
                       {[...Array(5)].map((_, i) => (
                         <Star 
                           key={i} 
-                          className={`w-3 h-3 ${i < result.rating ? "text-indigo-400 fill-indigo-400" : "text-slate-700"}`} 
+                          className={`w-3 h-3 ${i < resultA.rating ? "text-indigo-400 fill-indigo-400" : "text-slate-700"}`} 
                         />
                       ))}
-                      <span className="ml-2 text-xs font-bold text-indigo-400 font-mono tracking-tighter">{result.rating.toFixed(1)}</span>
+                      <span className="ml-2 text-xs font-bold text-indigo-400 font-mono tracking-tighter">{resultA.rating.toFixed(1)}</span>
                     </div>
                     <div className="flex items-center gap-2">
                        <span className="text-[10px] uppercase font-bold tracking-widest text-slate-500 underline decoration-indigo-500 decoration-2 underline-offset-4">Synthetic User Response</span>
@@ -339,7 +396,7 @@ export default function App() {
                   
                   <div className="flex-grow mb-8">
                     <p className="text-2xl md:text-3xl font-light italic text-white leading-snug">
-                      "{result.review}"
+                      "{resultA.review}"
                     </p>
                   </div>
 
@@ -348,7 +405,50 @@ export default function App() {
                        <ChevronRight className="w-3 h-3" /> Behavioral Invariant Logic
                     </h4>
                     <div className="text-[11px] text-slate-400 leading-relaxed font-mono overflow-y-auto max-h-[120px] scrollbar-none">
-                       <ReactMarkdown>{result.reasoning}</ReactMarkdown>
+                       <ReactMarkdown>{resultA.reasoning}</ReactMarkdown>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {currentTask === "B" && resultB && (
+                <motion.div 
+                  key="resultB"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex-grow flex flex-col h-full"
+                >
+                  <div className="flex justify-between items-center mb-6">
+                    <h4 className="label-micro text-indigo-400 flex items-center gap-2">
+                       <ChevronRight className="w-3 h-3" /> Recursive Recommendation Logic
+                    </h4>
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-slate-500 underline decoration-indigo-500 decoration-2 underline-offset-4">Ranked Retrieval</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 overflow-y-auto max-h-[300px] scrollbar-none pr-2">
+                    {resultB.recommendations.map((rec, i) => (
+                      <div key={i} className="p-4 bg-white/5 border border-white/5 rounded-xl block">
+                         <div className="flex justify-between items-center mb-2">
+                            <span className="text-[10px] font-mono text-indigo-500 font-bold">REC_0{i+1}</span>
+                            <span className="text-[10px] font-mono text-emerald-400 font-bold">{rec.matchScore}% MATCH</span>
+                         </div>
+                         <h5 className="text-sm font-bold text-white mb-1 flex items-center gap-2">
+                           {rec.item.name}
+                           <ArrowRight className="w-3 h-3 text-indigo-400" />
+                         </h5>
+                         <p className="text-[10px] text-slate-400 italic leading-relaxed">
+                           {rec.reasoning}
+                         </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="pt-6 border-t border-white/5">
+                    <h4 className="label-micro text-emerald-400 mb-3 flex items-center gap-2">
+                       <Cpu className="w-3 h-3" /> Multiturn Reasoning Trace
+                    </h4>
+                    <div className="text-[11px] text-slate-400 leading-relaxed font-mono overflow-y-auto max-h-[80px] scrollbar-none">
+                       <ReactMarkdown>{resultB.analysis}</ReactMarkdown>
                     </div>
                   </div>
                 </motion.div>
@@ -359,8 +459,8 @@ export default function App() {
           {/* Metrics - 2 Smaller Cards */}
           <div className="grid grid-cols-2 gap-4 h-20">
             <div className="bento-card border-indigo-500/20 flex flex-col justify-center items-center text-center p-2">
-                <div className="text-xl font-black text-white">89%</div>
-                <p className="label-micro opacity-60 text-[8px]">Tone Fidelity</p>
+                <div className="text-xl font-black text-white">{currentTask === "A" ? "89%" : "91%"}</div>
+                <p className="label-micro opacity-60 text-[8px]">{currentTask === "A" ? "Tone Fidelity" : "Retrieval Precision"}</p>
             </div>
             <div className="bento-card border-emerald-500/20 flex flex-col justify-center items-center text-center p-2">
                 <div className="text-xl font-black text-emerald-400 uppercase tracking-tighter italic">Valid</div>
@@ -373,7 +473,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="flex justify-between items-center text-[10px] uppercase tracking-widest text-slate-600 font-bold pt-4 border-t border-white/5">
-        <div>SYS_NODE_0x7F2A // USER_MODELING_TASK_A</div>
+        <div>SYS_NODE_0x7F2A // USER_MODELING_TASK_{currentTask}</div>
         <div className="flex items-center gap-4">
            <span>Model: gemini-3-flash</span>
            <span className="text-indigo-500 opacity-60">Status: Optimized</span>
