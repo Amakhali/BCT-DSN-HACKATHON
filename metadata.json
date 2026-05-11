@@ -1,0 +1,6 @@
+{
+  "name": "PersonaMind: User Modeling Agent",
+  "description": "An AI agent that simulates authentic user reviews and ratings based on deep behavioral modeling, history, and contextual signals.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
